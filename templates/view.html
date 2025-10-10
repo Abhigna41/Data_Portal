@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>View Submitted Data</title>
+</head>
+<body>
+<h1>View Submitted Data</h1>
+
+<form method="post">
+    <label>Table & Month:</label>
+    <select name="table_month">
+        {% for table, month in tables_list %}
+            <option value="{{ table }}_{{ month }}"
+            {% if selected_table == table and selected_month == month %}selected{% endif %}>
+                {{ table }} ({{ month }})
+            </option>
+        {% endfor %}
+    </select>
+    <button type="submit">View</button>
+</form>
+
+{% if rows %}
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            {% for key in rows[0].keys() %}
+                <th>{{ key }}</th>
+            {% endfor %}
+        </tr>
+        {% for row in rows %}
+            <tr>
+                {% for value in row.values() %}
+                    <td>{{ value }}</td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+    </table>
+
+    <a href="{{ url_for('download_data') }}?table_month={{ selected_table }}_{{ selected_month }}">
+        <button type="button">Download CSV</button>
+    </a>
+{% endif %}
+
+<a href="{{ url_for('index') }}">Back to Data Entry</a>
+</body>
+</html>

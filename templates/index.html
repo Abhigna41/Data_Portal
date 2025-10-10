@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Data Portal</title>
+</head>
+<body>
+<h1>Data Portal</h1>
+
+<a href="{{ url_for('view_data') }}"><button type="button">View Submitted Data</button></a>
+
+<label>Select Table:</label>
+<select id="tableSelect" onchange="fetchItems()">
+    {% for table in tables %}
+        <option value="{{ table }}">{{ table }}</option>
+    {% endfor %}
+</select>
+
+<form id="dataForm" onsubmit="submitData(); return false;">
+    <label>Date:</label><input type="date" id="date" required>
+    <label>Item:</label><select id="item" onchange="autofillItem()"></select>
+    <label>Code:</label><input type="text" id="code" readonly>
+
+    <div id="rateFields">
+        <label>Rate:</label><input type="text" id="rate" readonly>
+    </div>
+
+    <label>Quantity:</label><input type="number" id="quantity" oninput="calculateTotal()" required>
+
+    <div id="totalFields">
+        <label>Total:</label><input type="text" id="total" readonly>
+    </div>
+
+    <button type="submit">Submit</button>
+</form>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
