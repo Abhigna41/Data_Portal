@@ -2,45 +2,683 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>View Submitted Data</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Submitted Data | Data Portal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a56d4;
+            --secondary: #7209b7;
+            --accent: #f72585;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --gray: #6c757d;
+            --success: #4cc9f0;
+            --danger: #dc3545;
+            --danger-dark: #c82333;
+            --card-bg: #ffffff;
+            --border-radius: 16px;
+            --box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--dark);
+        }
+
+        .portal-container {
+            width: 100%;
+            max-width: 1400px;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 0;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            overflow: hidden;
+            min-height: 90vh;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+        }
+
+        .logo h1 {
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .nav-links {
+            list-style: none;
+            margin-top: 20px;
+            flex-grow: 1;
+        }
+
+        .nav-links li {
+            margin-bottom: 8px;
+        }
+
+        .nav-links a {
+            color: rgba(255, 255, 255, 0.85);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border-radius: 10px;
+            transition: var(--transition);
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-links i {
+            margin-right: 12px;
+            width: 20px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        .active-link {
+            background: rgba(255, 255, 255, 0.15) !important;
+            color: white !important;
+            font-weight: 500;
+        }
+
+        .sidebar-footer {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .main-content {
+            padding: 40px;
+            background: #f9fafc;
+            overflow-y: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--dark);
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .page-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 4px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .content-card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 25px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+        }
+
+        .card-title i {
+            margin-right: 10px;
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark);
+            font-size: 14px;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: var(--transition);
+            background: white;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 14px 28px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            text-align: center;
+            text-decoration: none;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 7px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+        }
+
+        .btn-accent:hover {
+            background: #e11574;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: var(--danger-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 7px 15px rgba(220, 53, 69, 0.3);
+        }
+
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 20px;
+            align-items: end;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .message {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .error-message {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .success-message {
+            background: rgba(76, 201, 240, 0.1);
+            color: #1890c5;
+            border: 1px solid rgba(76, 201, 240, 0.3);
+        }
+
+        .info-box {
+            display: flex;
+            align-items: center;
+            background: rgba(67, 97, 238, 0.05);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .info-box i {
+            font-size: 24px;
+            color: var(--primary);
+            margin-right: 15px;
+        }
+
+        .info-content h3 {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .info-content p {
+            color: var(--gray);
+            font-size: 14px;
+        }
+
+        /* Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .data-table th {
+            background: var(--primary);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e1e5e9;
+            font-size: 14px;
+        }
+
+        .data-table tr:hover {
+            background: rgba(67, 97, 238, 0.05);
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .btn-delete {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: var(--transition);
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .btn-delete:hover {
+            background: var(--danger-dark);
+            transform: translateY(-1px);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .danger-zone {
+            background: rgba(220, 53, 69, 0.05);
+            border: 2px solid rgba(220, 53, 69, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .danger-zone h3 {
+            color: var(--danger);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .danger-zone h3 i {
+            margin-right: 10px;
+        }
+
+        .danger-zone p {
+            color: var(--gray);
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 992px) {
+            .portal-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+            
+            .main-content {
+                padding: 25px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .data-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+        }
+    </style>
 </head>
 <body>
-<h1>View Submitted Data</h1>
+    <div class="portal-container">
+        <div class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-database"></i>
+                </div>
+                <h1>Data Portal</h1>
+            </div>
+            
+            <ul class="nav-links">
+                <li><a href="{{ url_for('portal') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="#" class="active-link"><i class="fas fa-table"></i> View Data</a></li>
+                <li><a href="{{ url_for('download_page') }}"><i class="fas fa-download"></i> Download Data</a></li>
+                
+            </ul>
+            
+            <div class="sidebar-footer">
+                <p>Data Portal v2.1 &copy; 2023</p>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="header">
+                <h1 class="page-title">View Submitted Data</h1>
+                <div class="user-info">
+                    <div class="user-avatar">JD</div>
+                   
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <i class="fas fa-info-circle"></i>
+                <div class="info-content">
+                    <h3>View and Manage Data</h3>
+                    <p>Select a table and month to view submitted data. You can also download or delete data.</p>
+                </div>
+            </div>
+            
+            <div class="content-card">
+                <h2 class="card-title"><i class="fas fa-filter"></i> Filter Data</h2>
+                <form method="POST">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tableSelect">Table</label>
+                            <select name="table" id="tableSelect" onchange="updateMonths()">
+                                {% for t in table_month_dict.keys() %}
+                                    <option value="{{ t }}" {% if t==selected_table %}selected{% endif %}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="monthSelect">Month</label>
+                            <select name="month" id="monthSelect">
+                                {% if selected_table %}
+                                    {% for m in table_month_dict[selected_table] %}
+                                        <option value="{{ m }}" {% if m==selected_month %}selected{% endif %}>{{ m }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-block">
+                                <i class="fas fa-eye"></i> View Data
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+                {% if message %}
+                <div class="message error-message">
+                    <i class="fas fa-exclamation-circle"></i> {{ message }}
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if rows %}
+            <div class="content-card">
+                <h2 class="card-title"><i class="fas fa-table"></i> Submitted Data</h2>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                {% for key in rows[0].keys() %}
+                                    <th>{{ key }}</th>
+                                {% endfor %}
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                                <tr>
+                                    {% for value in row.values() %}
+                                        <td>{{ value }}</td>
+                                    {% endfor %}
+                                    <td>
+                                        <button class="btn-delete" onclick="deleteRecord('{{ selected_table }}', '{{ selected_month }}', '{{ row.id }}')">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="action-buttons">
+                    <a href="{{ url_for('download_data', table=selected_table, month=selected_month) }}" class="btn btn-accent">
+                        <i class="fas fa-download"></i> Download CSV
+                    </a>
+                    <a href="{{ url_for('portal') }}" class="btn">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
 
-<form method="post">
-    <label>Table & Month:</label>
-    <select name="table_month">
-        {% for table, month in tables_list %}
-            <option value="{{ table }}_{{ month }}"
-            {% if selected_table == table and selected_month == month %}selected{% endif %}>
-                {{ table }} ({{ month }})
-            </option>
-        {% endfor %}
-    </select>
-    <button type="submit">View</button>
-</form>
+               
+            </div>
+            {% endif %}
+        </div>
+    </div>
 
-{% if rows %}
-    <table border="1" cellpadding="5" cellspacing="0">
-        <tr>
-            {% for key in rows[0].keys() %}
-                <th>{{ key }}</th>
-            {% endfor %}
-        </tr>
-        {% for row in rows %}
-            <tr>
-                {% for value in row.values() %}
-                    <td>{{ value }}</td>
-                {% endfor %}
-            </tr>
-        {% endfor %}
-    </table>
+    <script>
+        const tableMonthDict = {{ table_month_dict|tojson }};
+        
+        function updateMonths() {
+            const table = document.getElementById("tableSelect").value;
+            const monthSelect = document.getElementById("monthSelect");
+            monthSelect.innerHTML = "";
 
-    <a href="{{ url_for('download_data') }}?table_month={{ selected_table }}_{{ selected_month }}">
-        <button type="button">Download CSV</button>
-    </a>
-{% endif %}
+            if(!tableMonthDict[table] || tableMonthDict[table].length === 0){
+                const opt = document.createElement("option");
+                opt.text = "No submissions yet";
+                opt.value = "";
+                monthSelect.add(opt);
+                return;
+            }
 
-<a href="{{ url_for('index') }}">Back to Data Entry</a>
+            tableMonthDict[table].forEach(m => {
+                const opt = document.createElement("option");
+                opt.value = m;
+                opt.text = m;
+                monthSelect.add(opt);
+            });
+        }
+
+        async function deleteRecord(table, month, recordId) {
+            if (!confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/delete_data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        table: table,
+                        month: month,
+                        id: recordId
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    // Refresh the page to show updated data
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error deleting record:', error);
+                alert('Error deleting record');
+            }
+        }
+
+        async function deleteAllData(table, month) {
+            if (!confirm(`🚨 WARNING: This will delete ALL data for ${table} (${month}). This action cannot be undone!`)) {
+                return;
+            }
+
+            if (!confirm('Are you absolutely sure? This will permanently delete all records for this table and month.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/delete_data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        table: table,
+                        month: month
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    // Redirect to view page without selected table/month
+                    window.location.href = "{{ url_for('view_data') }}";
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error deleting data:', error);
+                alert('Error deleting data');
+            }
+        }
+
+        // Initialize on page load
+        window.onload = function() {
+            updateMonths();
+        };
+    </script>
 </body>
 </html>
