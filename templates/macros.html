@@ -1,0 +1,3 @@
+{% macro embed_json(id, obj) -%}
+<script id="{{ id }}" type="application/json">{{ obj|tojson }}</script>
+{%- endmacro %}

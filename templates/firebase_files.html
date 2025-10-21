@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Firebase CSV files</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;padding:20px}
+    .file{margin:8px 0}
+    .btn{background:#4361ee;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none}
+  </style>
+</head>
+<body>
+  <h1>CSV files in Firebase Storage</h1>
+  {% if files %}
+    <ul>
+      {% for f in files %}
+        <li class="file">{{ f }} - <button class="btn" onclick="getSignedUrl('{{ f }}')">Download / Open</button></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No CSV files found in Firebase storage.</p>
+  {% endif %}
+  <p><a href="{{ url_for('portal') }}">Back to portal</a></p>
+</body>
+<script>
+async function getSignedUrl(name){
+  try{
+    const resp = await fetch(`/firebase_signed_url?name=${encodeURIComponent(name)}&expiry=15`);
+    const data = await resp.json();
+    if(data.success){
+      window.open(data.url, '_blank');
+    } else {
+      alert('Failed to get signed URL: ' + (data.message || 'unknown'));
+    }
+  }catch(e){
+    console.error(e);
+    alert('Error requesting signed URL');
+  }
+}
+</script>
+</html>

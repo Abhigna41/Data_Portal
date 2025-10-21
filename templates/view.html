@@ -582,8 +582,11 @@
         </div>
     </div>
 
+    <!-- Embed table_month_dict as raw JSON in a non-JS script tag so editors won't flag Jinja tokens -->
+    <script id="table-month-data" type="application/json">{{ table_month_dict|tojson }}</script>
     <script>
-        const tableMonthDict = {{ table_month_dict|tojson }};
+        // Parse the JSON from the non-JS script tag at runtime
+        const tableMonthDict = JSON.parse(document.getElementById('table-month-data').textContent || '{}');
         
         function updateMonths() {
             const table = document.getElementById("tableSelect").value;

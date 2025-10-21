@@ -82,3 +82,43 @@ async function submitData(){
     alert(result);
 }
 
+async function getDownloadLink(table, month) {
+    const response = await fetch(`/download?table=${table}&month=${month}`);
+    const data = await response.json();
+    if (data.success) {
+        document.getElementById('download_link').innerHTML =
+            `<a href="${data.url}" target="_blank">Download CSV</a>`;
+    } else {
+        alert(data.message);
+    }
+}
+
+
+document.getElementById("downloadBtn").addEventListener("click", async function() {
+    const table = tableSelect.value;
+    const month = monthSelect.value;
+
+    if(!table || !month){
+        alert("Please select table and month!");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/download?table=${table}&month=${month}`);
+        const data = await response.json();
+
+        const linkDiv = document.getElementById("download_link");
+
+        if(data.success){
+            linkDiv.innerHTML = `<a href="${data.url}" target="_blank" class="btn btn-accent btn-block">
+                                    <i class="fas fa-file-csv"></i> Click here to download CSV
+                                </a>`;
+        } else {
+            linkDiv.innerHTML = `<p style="color:red;">${data.message}</p>`;
+        }
+
+    } catch(err){
+        console.error(err);
+        alert("Error fetching download link!");
+    }
+});

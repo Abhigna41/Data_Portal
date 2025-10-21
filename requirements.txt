@@ -1,0 +1,5 @@
+Flask
+mysql-connector-python
+firebase-admin
+python-dotenv
+gunicorn

@@ -388,6 +388,7 @@
                 <li><a href="{{ url_for('portal') }}"><i class="fas fa-home"></i> Dashboard</a></li>
                 <li><a href="{{ url_for('view_data') }}"><i class="fas fa-table"></i> View Data</a></li>
                 <li><a href="#" class="active-link"><i class="fas fa-download"></i> Download Data</a></li>
+                <li><a href="{{ url_for('firebase_files') }}"><i class="fas fa-folder-open"></i> Files</a></li>
                 
             </ul>
             
@@ -411,63 +412,84 @@
             </div>
             
             <div class="content-card">
+                <div id="download_link" style="margin-top:15px;"></div>
                 <h2 class="card-title"><i class="fas fa-download"></i> Quick Download</h2>
-                <form method="GET" action="{{ url_for('download_data') }}">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="tableSelect">Table</label>
-                            <select name="table" id="tableSelect" required>
-                                <option value="">-- Select Table --</option>
-                                {% for table in table_month_dict.keys() %}
-                                    <option value="{{ table }}">{{ table }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="monthSelect">Month</label>
-                            <select name="month" id="monthSelect" required>
-                                <option value="">-- Select Month --</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <button type="submit" class="btn btn-accent btn-block">
-                                <i class="fas fa-file-csv"></i> Download CSV
-                            </button>
-                        </div>
-                    </div>
-                </form>
+            <form id="downloadForm">
+    <div class="form-row">
+        <div class="form-group">
+            <label for="tableSelect">Table</label>
+            <select name="table" id="tableSelect" required>
+                <option value="">-- Select Table --</option>
+                {% for table in table_month_dict.keys() %}
+                    <option value="{{ table }}">{{ table }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="monthSelect">Month</label>
+            <select name="month" id="monthSelect" required>
+                <option value="">-- Select Month --</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <button type="button" id="downloadBtn" class="btn btn-accent btn-block">
+                <i class="fas fa-file-csv"></i> Download CSV
+            </button>
+        </div>
+    </div>
+</form>
+
             </div>
             
             
         </div>
     </div>
 
-    <script>
-        const tableMonthDict = {{ table_month_dict|tojson }};
-        const tableSelect = document.getElementById("tableSelect");
+    <!-- Embed table_month_dict as raw JSON in a non-JS script tag so editors won't flag Jinja tokens -->
+   <script id="table-month-data" type="application/json">{{ table_month_dict|tojson }}</script>
+<script>
+    const tableMonthDict = JSON.parse(document.getElementById('table-month-data').textContent || '{}');
+    const tableSelect = document.getElementById("tableSelect");
+    const monthSelect = document.getElementById("monthSelect");
+    
+    function updateMonths() {
+        const table = document.getElementById("tableSelect").value;
         const monthSelect = document.getElementById("monthSelect");
-        
+        monthSelect.innerHTML = '<option value="">-- Select Month --</option>';
 
-        function updateMonths() {
-            const table = document.getElementById("tableSelect").value;
-            const monthSelect = document.getElementById("monthSelect");
-            monthSelect.innerHTML = '<option value="">-- Select Month --</option>';
-
-            if(table && tableMonthDict[table] && tableMonthDict[table].length > 0){
-                tableMonthDict[table].forEach(m => {
-                    const opt = document.createElement("option");
-                    opt.value = m;
-                    opt.text = m;
-                    monthSelect.add(opt);
-                });
-            }
+        if(table && tableMonthDict[table] && tableMonthDict[table].length > 0){
+            tableMonthDict[table].forEach(m => {
+                const opt = document.createElement("option");
+                opt.value = m;
+                opt.text = m;
+                monthSelect.add(opt);
+            });
         }
+    }
 
-        // Initialize on page load
-        document.getElementById("tableSelect").addEventListener("change", updateMonths);
-    </script>
+    document.getElementById("tableSelect").addEventListener("change", updateMonths);
+</script>
+<script>
+document.getElementById("downloadBtn").addEventListener("click", function() {
+    const table = tableSelect.value;
+    const month = monthSelect.value;
+    const linkDiv = document.getElementById("download_link");
+
+    if(!table || !month){
+        alert("Please select table and month!");
+        return;
+    }
+
+    // Build the download URL and navigate the browser there so the CSV is returned
+    const url = `/download?table=${encodeURIComponent(table)}&month=${encodeURIComponent(month)}`;
+    linkDiv.innerHTML = '<p>Preparing download...</p>';
+    // Use location.href so the browser will handle the file download
+    window.location.href = url;
+});
+</script>
+
 </body>
 
 </html>
