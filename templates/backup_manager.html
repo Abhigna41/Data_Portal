@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup Manager | Data Portal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .section h2 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        select, input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .message {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            display: none;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-left: 4px solid #2196F3;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-cloud-upload-alt"></i> Firebase Backup Manager</h1>
+        
+        <div class="info">
+            <strong>Info:</strong> Manage your Firebase backups. Restore data from backups or trigger manual backups.
+        </div>
+
+        <!-- Restore Section -->
+        <div class="section">
+            <h2><i class="fas fa-undo"></i> Restore from Firebase</h2>
+            <p>Restore submitted data from Firebase backup to MySQL database.</p>
+            <div class="form-group">
+                <label for="restore-table">Select Table:</label>
+                <select id="restore-table">
+                    <option value="">-- Select Table --</option>
+                    <option value="id_grind">ID Grind</option>
+                    <option value="od_grind">OD Grind</option>
+                    <option value="od_patch">OD Patch</option>
+                    <option value="milling">Milling</option>
+                    <option value="wasem">Wasem</option>
+                    <option value="turning">Turning</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="restore-month">Month (YYYY_MM):</label>
+                <input type="text" id="restore-month" placeholder="e.g., 2025_10">
+            </div>
+            <button class="btn btn-success" onclick="restoreFromFirebase()">
+                <i class="fas fa-download"></i> Restore Data
+            </button>
+            <div id="restore-message" class="message"></div>
+        </div>
+
+        <!-- Backup All Section -->
+        <div class="section">
+            <h2><i class="fas fa-cloud-upload-alt"></i> Backup All Tables</h2>
+            <p>Manually trigger a backup of all submitted tables to Firebase.</p>
+            <button class="btn" onclick="backupAll()">
+                <i class="fas fa-upload"></i> Backup All Now
+            </button>
+            <div id="backup-message" class="message"></div>
+        </div>
+
+        <a href="/portal" class="back-link"><i class="fas fa-arrow-left"></i> Back to Portal</a>
+    </div>
+
+    <script>
+        async function restoreFromFirebase() {
+            const table = document.getElementById('restore-table').value;
+            const month = document.getElementById('restore-month').value;
+            const msgDiv = document.getElementById('restore-message');
+            
+            if (!table || !month) {
+                showMessage(msgDiv, 'Please select table and enter month', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/restore_from_firebase', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({table, month})
+                });
+                const data = await response.json();
+                showMessage(msgDiv, data.message, data.success ? 'success' : 'error');
+            } catch (error) {
+                showMessage(msgDiv, 'Error: ' + error.message, 'error');
+            }
+        }
+
+        async function backupAll() {
+            const msgDiv = document.getElementById('backup-message');
+            showMessage(msgDiv, 'Backing up... Please wait.', 'success');
+            
+            try {
+                const response = await fetch('/backup_all_to_firebase', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const data = await response.json();
+                showMessage(msgDiv, data.message, data.success ? 'success' : 'error');
+            } catch (error) {
+                showMessage(msgDiv, 'Error: ' + error.message, 'error');
+            }
+        }
+
+        function showMessage(div, message, type) {
+            div.textContent = message;
+            div.className = 'message ' + type;
+            div.style.display = 'block';
+            setTimeout(() => {
+                div.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -73,6 +73,12 @@ def portal():
         return redirect(url_for('index'))
     return render_template('index.html', tables=get_tables_list())
 
+@app.route('/backup_manager')
+def backup_manager():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    return render_template('backup_manager.html')
+
 # --- DATA ENDPOINTS ---
 @app.route('/get_items')
 def get_items():
@@ -385,6 +391,153 @@ def delete_data_route():
     finally:
         cursor.close()
         conn.close()
+
+
+# --- FIREBASE BACKUP & RESTORE FEATURES ---
+
+@app.route('/restore_from_firebase', methods=['POST'])
+def restore_from_firebase():
+    """Restore submitted data from Firebase backup to MySQL"""
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'Not authorized'}), 401
+    
+    data = request.get_json()
+    table = data.get('table')
+    month = data.get('month')
+    
+    if not table or not month:
+        return jsonify({'success': False, 'message': 'Table and month are required'})
+    
+    final_table = f"submitted_{table}_{month}"
+    storage_path = f"submitted/{final_table}.csv"
+    
+    try:
+        # Download CSV from Firebase
+        blob = bucket.blob(storage_path)
+        csv_data = blob.download_as_text()
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(io.StringIO(csv_data))
+        rows = list(csv_reader)
+        
+        if not rows:
+            return jsonify({'success': False, 'message': 'No data found in Firebase backup'})
+        
+        # Restore to MySQL
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            # Drop existing table if it exists
+            cursor.execute(f"DROP TABLE IF EXISTS {final_table}")
+            
+            # Recreate table based on table type
+            if table.lower() == "wasem":
+                cursor.execute(f"""
+                    CREATE TABLE {final_table} (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        date DATE,
+                        item VARCHAR(100),
+                        code VARCHAR(50),
+                        G_Rate FLOAT,
+                        H_Rate FLOAT,
+                        quantity FLOAT,
+                        G_Total FLOAT,
+                        H_Total FLOAT
+                    )
+                """)
+            else:
+                cursor.execute(f"""
+                    CREATE TABLE {final_table} (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        date DATE,
+                        item VARCHAR(100),
+                        code VARCHAR(50),
+                        rate FLOAT,
+                        quantity FLOAT,
+                        total FLOAT
+                    )
+                """)
+            
+            # Insert data
+            for row in rows:
+                if table.lower() == "wasem":
+                    cursor.execute(f"""
+                        INSERT INTO {final_table} (date, item, code, G_Rate, H_Rate, quantity, G_Total, H_Total)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (row['date'], row['item'], row['code'], row['G_Rate'], row['H_Rate'], 
+                          row['quantity'], row['G_Total'], row['H_Total']))
+                else:
+                    cursor.execute(f"""
+                        INSERT INTO {final_table} (date, item, code, rate, quantity, total)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (row['date'], row['item'], row['code'], row['rate'], row['quantity'], row['total']))
+            
+            conn.commit()
+            return jsonify({'success': True, 'message': f'✅ Successfully restored {len(rows)} records from Firebase'})
+            
+        finally:
+            cursor.close()
+            conn.close()
+            
+    except Exception as e:
+        print(f'Restore error: {e}')
+        return jsonify({'success': False, 'message': f'❌ Failed to restore: {str(e)}'})
+
+
+@app.route('/backup_all_to_firebase', methods=['POST'])
+def backup_all_to_firebase():
+    """Manually trigger backup of all submitted tables to Firebase"""
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'Not authorized'}), 401
+    
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get all submitted tables
+        cursor.execute("SHOW TABLES LIKE 'submitted_%'")
+        tables = [list(row.values())[0] for row in cursor.fetchall()]
+        
+        backed_up = 0
+        failed = []
+        
+        for table_name in tables:
+            try:
+                # Fetch all data
+                cursor.execute(f"SELECT * FROM {table_name} ORDER BY id DESC")
+                rows = cursor.fetchall()
+                
+                if rows:
+                    # Create CSV
+                    out = io.StringIO()
+                    writer = csv.writer(out)
+                    writer.writerow(rows[0].keys())
+                    for r in rows:
+                        writer.writerow(r.values())
+                    out.seek(0)
+                    
+                    # Upload to Firebase
+                    storage_path = f"submitted/{table_name}.csv"
+                    upload_csv_to_firebase(storage_path, out.getvalue())
+                    backed_up += 1
+            except Exception as e:
+                print(f'Failed to backup {table_name}: {e}')
+                failed.append(table_name)
+        
+        cursor.close()
+        conn.close()
+        
+        message = f'✅ Backed up {backed_up} tables to Firebase'
+        if failed:
+            message += f'. Failed: {", ".join(failed)}'
+        
+        return jsonify({'success': True, 'message': message, 'backed_up': backed_up, 'failed': len(failed)})
+        
+    except Exception as e:
+        print(f'Backup error: {e}')
+        return jsonify({'success': False, 'message': f'❌ Backup failed: {str(e)}'})
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
