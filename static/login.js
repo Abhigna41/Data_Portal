@@ -5,9 +5,9 @@ async function login(event) {
     const password = document.getElementById("password").value.trim();
     const message = document.getElementById("message");
 
-    const response = await fetch("/login", {                    #to make http requestAnimationFrame, login is url endpoint
+    const response = await fetch("/login", {                   
         method: "POST",
-        headers: { "Content-Type": "application/json" },        # tells the server what kind of daat we are Sending.
+        headers: { "Content-Type": "application/json" },        
         body: JSON.stringify({ username, password })                   
     });
 
