@@ -15,16 +15,36 @@ from datetime import datetime
 from firebase_utils import upload_bytes, download_bytes
  
 
+# Ensure .env is loaded here as well (config.py also calls this, but this makes app.py standalone)
+load_dotenv()
+
 # Load the path from environment variable (recommended)
 FIREBASE_KEY_PATH = os.getenv("FIREBASE_KEY_PATH", "firebase-key.json")
-# Set the Firebase bucket name directly since we know the project ID
-FIREBASE_BUCKET = "dataportal-6d718.appspot.com"
+# Prefer configuring the storage bucket name via env. Example: "dataportal-6d718.appspot.com"
+FIREBASE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()
 
-# Initialize Firebase admin with the service account and configure the bucket
+# If FIREBASE_STORAGE_BUCKET is not set, attempt to infer from the service account project_id
+if not FIREBASE_BUCKET:
+    try:
+        import json
+        with open(FIREBASE_KEY_PATH, "r", encoding="utf-8") as f:
+            sa = json.load(f)
+        project_id = sa.get("project_id") if isinstance(sa, dict) else None
+        if project_id:
+            FIREBASE_BUCKET = f"{project_id}.appspot.com"
+    except Exception as _e:
+        # Leave FIREBASE_BUCKET empty; routes will report a clear error
+        pass
+
+# Initialize Firebase admin with the service account. If FIREBASE_BUCKET is provided,
+# configure it as the default storage bucket; otherwise initialize without it and we'll
+# attempt to use storage.bucket() which relies on the project's default bucket.
 cred = credentials.Certificate(FIREBASE_KEY_PATH)
-firebase_admin.initialize_app(cred, {
-    'storageBucket': FIREBASE_BUCKET
-})
+if not firebase_admin._apps:
+    if FIREBASE_BUCKET:
+        firebase_admin.initialize_app(cred, {'storageBucket': FIREBASE_BUCKET})
+    else:
+        firebase_admin.initialize_app(cred)
 
 # Final initialization of a firebase-admin storage bucket object. If the bucket cannot
 # be configured here, operations that use it will raise and we will show clearer errors.
@@ -34,6 +54,9 @@ try:
     else:
         # Fall back to default bucket configured in the app (if any)
         bucket = storage.bucket()
+    # Optional: sanity check the bucket name object (won't call network)
+    if not bucket:
+        raise RuntimeError('No Firebase Storage bucket configured. Set FIREBASE_STORAGE_BUCKET or create the default bucket in Firebase Console.')
 except Exception as e:
     # Keep `bucket` name unset so routes can report clearer errors
     print('Failed to initialize Firebase bucket:', e)
@@ -363,6 +386,49 @@ def debug_firebase_buckets():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'resolved_bucket_env': FIREBASE_BUCKET}), 500
+
+
+# Deterministic check for a specific bucket without requiring broad list permissions
+@app.route('/debug/firebase_bucket_check')
+def debug_firebase_bucket_check():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    try:
+        if not FIREBASE_BUCKET:
+            return jsonify({'ok': False, 'reason': 'FIREBASE_STORAGE_BUCKET not set', 'resolved_bucket_env': FIREBASE_BUCKET}), 400
+
+        client = gcs_storage.Client.from_service_account_json(FIREBASE_KEY_PATH)
+        # lookup_bucket returns None if bucket does not exist or not accessible
+        bucket_obj = client.lookup_bucket(FIREBASE_BUCKET)
+        if bucket_obj is None:
+            return jsonify({'ok': False, 'reason': 'Bucket not found or not accessible', 'bucket': FIREBASE_BUCKET}), 404
+        return jsonify({'ok': True, 'bucket': bucket_obj.name, 'location': getattr(bucket_obj, 'location', None)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e), 'bucket': FIREBASE_BUCKET}), 500
+
+
+# List all registered routes to help diagnose 404s
+@app.route('/debug/routes')
+def debug_routes():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    try:
+        routes = []
+        for rule in app.url_map.iter_rules():
+            routes.append({
+                'rule': str(rule),
+                'endpoint': rule.endpoint,
+                'methods': sorted(list(rule.methods - {'HEAD', 'OPTIONS'}))
+            })
+        # Sort for readability
+        routes.sort(key=lambda r: r['rule'])
+        return jsonify({'routes': routes})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 # --- DELETE DATA ---

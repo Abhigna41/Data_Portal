@@ -1,4 +1,4 @@
-import os
+import os, firebase_admin
 from firebase_admin import storage
 
 FIREBASE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", "")
