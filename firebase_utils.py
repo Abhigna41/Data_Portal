@@ -1,7 +1,11 @@
 import os, firebase_admin
 from firebase_admin import storage
 
-FIREBASE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", "")
+# Read bucket from environment and normalize if needed
+FIREBASE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()
+if FIREBASE_BUCKET.endswith(".firebasestorage.app"):
+    # Convert web domain to actual bucket domain for Admin SDK
+    FIREBASE_BUCKET = FIREBASE_BUCKET.replace(".firebasestorage.app", ".appspot.com")
 
 
 def get_bucket():
@@ -13,6 +17,7 @@ def get_bucket():
     if FIREBASE_BUCKET:
         return storage.bucket(FIREBASE_BUCKET)
     return storage.bucket()
+
 
 
 def upload_bytes(path_in_bucket: str, data: bytes, content_type: str = "application/octet-stream"):

@@ -20,8 +20,14 @@ load_dotenv()
 
 # Load the path from environment variable (recommended)
 FIREBASE_KEY_PATH = os.getenv("FIREBASE_KEY_PATH", "firebase-key.json")
+# Allow providing the key as an env var (FIREBASE_KEY_JSON). We'll materialize it to a temp file if no file is present.
+FIREBASE_KEY_JSON = os.getenv("FIREBASE_KEY_JSON")
 # Prefer configuring the storage bucket name via env. Example: "dataportal-6d718.appspot.com"
 FIREBASE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()
+if FIREBASE_BUCKET.endswith(".firebasestorage.app"):
+    # Normalize to the actual bucket domain used by Admin SDK
+    # e.g., dataportal-6d718.firebasestorage.app -> dataportal-6d718.appspot.com
+    FIREBASE_BUCKET = FIREBASE_BUCKET.replace(".firebasestorage.app", ".appspot.com")
 
 # If FIREBASE_STORAGE_BUCKET is not set, attempt to infer from the service account project_id
 if not FIREBASE_BUCKET:
@@ -39,26 +45,51 @@ if not FIREBASE_BUCKET:
 # Initialize Firebase admin with the service account. If FIREBASE_BUCKET is provided,
 # configure it as the default storage bucket; otherwise initialize without it and we'll
 # attempt to use storage.bucket() which relies on the project's default bucket.
-cred = credentials.Certificate(FIREBASE_KEY_PATH)
-if not firebase_admin._apps:
-    if FIREBASE_BUCKET:
-        firebase_admin.initialize_app(cred, {'storageBucket': FIREBASE_BUCKET})
-    else:
-        firebase_admin.initialize_app(cred)
+bucket = None
+
+# Prepare credential file (from file or env JSON)
+def _prepare_firebase_credentials(path_hint: str, inline_json: str|None) -> str|None:
+    try:
+        if os.path.exists(path_hint):
+            return path_hint
+        if inline_json:
+            tmp_path = "/tmp/firebase-key.json"
+            try:
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    f.write(inline_json)
+                return tmp_path
+            except Exception as _w:
+                return None
+        return None
+    except Exception:
+        return None
+
+_cred_path = _prepare_firebase_credentials(FIREBASE_KEY_PATH, FIREBASE_KEY_JSON)
+
+if _cred_path:
+    try:
+        cred = credentials.Certificate(_cred_path)
+        if not firebase_admin._apps:
+            if FIREBASE_BUCKET:
+                firebase_admin.initialize_app(cred, {'storageBucket': FIREBASE_BUCKET})
+            else:
+                firebase_admin.initialize_app(cred)
+    except Exception as e:
+        print('Failed to initialize Firebase admin SDK:', e)
+else:
+    print('Firebase key not found. Set FIREBASE_KEY_PATH (Secret File) or FIREBASE_KEY_JSON (env). Firebase features will be disabled.')
 
 # Final initialization of a firebase-admin storage bucket object. If the bucket cannot
 # be configured here, operations that use it will raise and we will show clearer errors.
 try:
-    if FIREBASE_BUCKET:
-        bucket = storage.bucket(FIREBASE_BUCKET)
-    else:
-        # Fall back to default bucket configured in the app (if any)
-        bucket = storage.bucket()
-    # Optional: sanity check the bucket name object (won't call network)
-    if not bucket:
-        raise RuntimeError('No Firebase Storage bucket configured. Set FIREBASE_STORAGE_BUCKET or create the default bucket in Firebase Console.')
+    if firebase_admin._apps:
+        if FIREBASE_BUCKET:
+            bucket = storage.bucket(FIREBASE_BUCKET)
+        else:
+            bucket = storage.bucket()
+        if not bucket:
+            raise RuntimeError('No Firebase Storage bucket configured. Set FIREBASE_STORAGE_BUCKET or create the default bucket in Firebase Console.')
 except Exception as e:
-    # Keep `bucket` name unset so routes can report clearer errors
     print('Failed to initialize Firebase bucket:', e)
     bucket = None
 #--------------------------------------------------------------------------
@@ -429,6 +460,28 @@ def debug_routes():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+# Lightweight health check for deployment and DB connectivity
+@app.route('/health')
+def health():
+    try:
+        # DB check
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+        conn.close()
+        # Firebase check (optional)
+        fb = bool(bucket is not None)
+        return jsonify({
+            'ok': True,
+            'db': 'ok',
+            'firebase': 'ok' if fb else 'disabled',
+            'bucket': FIREBASE_BUCKET or None
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # --- DELETE DATA ---
