@@ -1,11 +1,6 @@
-<<<<<<< HEAD
+.env
 __pycache__/
 *.pyc
-.env
-firebase-key.json
 venv/
-=======
-.env
-__pycache__/
-*.pyc
->>>>>>> 8c71593a5e852a57f344d6db705be15a0d5b4fc3
+.venv/
+firebase-key.json
