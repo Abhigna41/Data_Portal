@@ -6,10 +6,14 @@ load_dotenv()
 
 DB_CONFIG = {
     "host": os.getenv("MYSQL_HOST", "localhost"),
+    "port": int(os.getenv("MYSQL_PORT", "3306")),
     "user": os.getenv("MYSQL_USER", "root"),
     "password": os.getenv("MYSQL_PASSWORD", "0000"),
     "database": os.getenv("MYSQL_DB", "data_portal"),
-    "consume_results": True  # Fix "Unread result found" error
+    "consume_results": True,  # Fix "Unread result found" error
+    "connect_timeout": 10,  # Connection timeout in seconds
+    "pool_name": "mypool",
+    "pool_size": 5
 }
 
 SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
