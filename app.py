@@ -3,109 +3,16 @@ import io
 import csv
 from models import *
 from config import SECRET_KEY, ADMIN_USERNAME, ADMIN_PASSWORD
-
-import firebase_admin
-from firebase_admin import credentials, storage
-from google.cloud import storage as gcs_storage
-from datetime import timedelta
 import os
-
 from dotenv import load_dotenv
 from datetime import datetime
-from firebase_utils import upload_bytes, download_bytes
- 
 
-# Ensure .env is loaded here as well (config.py also calls this, but this makes app.py standalone)
+# Load environment variables
 load_dotenv()
-
-# Load the path from environment variable (recommended)
-FIREBASE_KEY_PATH = os.getenv("FIREBASE_KEY_PATH", "firebase-key.json")
-# Allow providing the key as an env var (FIREBASE_KEY_JSON). We'll materialize it to a temp file if no file is present.
-FIREBASE_KEY_JSON = os.getenv("FIREBASE_KEY_JSON")
-# Prefer configuring the storage bucket name via env. Example: "dataportal-6d718.appspot.com"
-FIREBASE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()
-if FIREBASE_BUCKET.endswith(".firebasestorage.app"):
-    # Normalize to the actual bucket domain used by Admin SDK
-    # e.g., dataportal-6d718.firebasestorage.app -> dataportal-6d718.appspot.com
-    FIREBASE_BUCKET = FIREBASE_BUCKET.replace(".firebasestorage.app", ".appspot.com")
-
-# If FIREBASE_STORAGE_BUCKET is not set, attempt to infer from the service account project_id
-if not FIREBASE_BUCKET:
-    try:
-        import json
-        with open(FIREBASE_KEY_PATH, "r", encoding="utf-8") as f:
-            sa = json.load(f)
-        project_id = sa.get("project_id") if isinstance(sa, dict) else None
-        if project_id:
-            FIREBASE_BUCKET = f"{project_id}.appspot.com"
-    except Exception as _e:
-        # Leave FIREBASE_BUCKET empty; routes will report a clear error
-        pass
-
-# Initialize Firebase admin with the service account. If FIREBASE_BUCKET is provided,
-# configure it as the default storage bucket; otherwise initialize without it and we'll
-# attempt to use storage.bucket() which relies on the project's default bucket.
-bucket = None
-
-# Prepare credential file (from file or env JSON)
-def _prepare_firebase_credentials(path_hint: str, inline_json: str|None) -> str|None:
-    try:
-        if os.path.exists(path_hint):
-            return path_hint
-        if inline_json:
-            tmp_path = "/tmp/firebase-key.json"
-            try:
-                with open(tmp_path, "w", encoding="utf-8") as f:
-                    f.write(inline_json)
-                return tmp_path
-            except Exception as _w:
-                return None
-        return None
-    except Exception:
-        return None
-
-_cred_path = _prepare_firebase_credentials(FIREBASE_KEY_PATH, FIREBASE_KEY_JSON)
-
-if _cred_path:
-    try:
-        cred = credentials.Certificate(_cred_path)
-        if not firebase_admin._apps:
-            if FIREBASE_BUCKET:
-                firebase_admin.initialize_app(cred, {'storageBucket': FIREBASE_BUCKET})
-            else:
-                firebase_admin.initialize_app(cred)
-    except Exception as e:
-        print('Failed to initialize Firebase admin SDK:', e)
-else:
-    print('Firebase key not found. Set FIREBASE_KEY_PATH (Secret File) or FIREBASE_KEY_JSON (env). Firebase features will be disabled.')
-
-# Final initialization of a firebase-admin storage bucket object. If the bucket cannot
-# be configured here, operations that use it will raise and we will show clearer errors.
-try:
-    if firebase_admin._apps:
-        if FIREBASE_BUCKET:
-            bucket = storage.bucket(FIREBASE_BUCKET)
-        else:
-            bucket = storage.bucket()
-        if not bucket:
-            raise RuntimeError('No Firebase Storage bucket configured. Set FIREBASE_STORAGE_BUCKET or create the default bucket in Firebase Console.')
-except Exception as e:
-    print('Failed to initialize Firebase bucket:', e)
-    bucket = None
-#--------------------------------------------------------------------------
 
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
-
-def upload_csv_to_firebase(file_name, file_content):
-    # Upload CSV to Firebase Storage but keep the file private.
-    # We return the storage path (blob.name) so the app can reference it,
-    # but we do NOT make it public.
-    blob = bucket.blob(file_name)
-    blob.upload_from_string(file_content, content_type='text/csv')
-    return blob.name
-
 
 # --- LOGIN & PORTAL ---
 @app.route('/')
@@ -127,11 +34,7 @@ def portal():
         return redirect(url_for('index'))
     return render_template('index.html', tables=get_tables_list())
 
-@app.route('/backup_manager')
-def backup_manager():
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    return render_template('backup_manager.html')
+
 
 # --- DATA ENDPOINTS ---
 @app.route('/get_items')
@@ -157,40 +60,6 @@ def submit():
     try:
         # Insert into local DB
         submit_data(cursor, conn, data['table'], data['date'], data['item'], data['code'], data['rate'], data['quantity'], data['total'])
-
-        # Also upload the current table/month CSV to Firebase so submitted data is stored there
-        try:
-            # derive table_month and final_table same way models.submit_data does
-            date_obj = datetime.strptime(data['date'], "%Y-%m-%d")
-            table_month = f"{date_obj.year}_{date_obj.month:02d}"
-            final_table = f"submitted_{data['table']}_{table_month}"
-
-            # fetch all rows for this submitted table and build CSV
-            temp_cursor = conn.cursor(dictionary=True)
-            temp_cursor.execute(f"SELECT * FROM {final_table} ORDER BY id DESC")
-            rows = temp_cursor.fetchall()
-            temp_cursor.close()
-
-            if rows:
-                out = io.StringIO()
-                writer = csv.writer(out)
-                writer.writerow(rows[0].keys())
-                for r in rows:
-                    writer.writerow(r.values())
-                out.seek(0)
-
-                # store under a folder path so files are organized in the bucket
-                storage_path = f"submitted/{final_table}.csv"
-                try:
-                    upload_csv_to_firebase(storage_path, out.getvalue())
-                except Exception as fb_e:
-                    # Log Firebase upload failure but don't fail the whole submission
-                    print('Firebase upload error:', fb_e)
-
-        except Exception as e_inner:
-            # non-fatal: log and continue
-            print('Error preparing Firebase CSV:', e_inner)
-
         return "✅ Data submitted successfully!"
     except Exception as e:
         print(e)
@@ -258,36 +127,6 @@ def download_page():
 
     return render_template('download.html', table_month_dict=table_month_dict)
 
-@app.route('/firebase-upload', methods=['POST'])
-def firebase_upload():
-    # Simple endpoint to upload a file (form field 'file') to firebase storage
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    f = request.files['file']
-    filename = f.filename or f"upload_{int(datetime.utcnow().timestamp())}"
-    data = f.read()
-    try:
-        public_url = upload_bytes(f"uploads/{filename}", data, content_type=f.content_type)
-        return jsonify({'message': 'uploaded', 'url': public_url})
-    except Exception as e:
-        print('Upload error:', e)
-        return jsonify({'error': 'Upload failed'}), 500
-
-@app.route('/firebase-download')
-def firebase_download():
-    # Provide a `path` query param that matches the object path in the bucket
-    path = request.args.get('path')
-    if not path:
-        return jsonify({'error': 'path query param required'}), 400
-    try:
-        data = download_bytes(path)
-        return send_file(io.BytesIO(data), download_name=os.path.basename(path), as_attachment=True)
-    except Exception as e:
-        print('Download error:', e)
-        return jsonify({'error': 'Download failed'}), 500
-
-
-
 @app.route('/download', methods=['GET'])
 def download_data():
     table = request.args.get('table')
@@ -339,107 +178,6 @@ def download_data():
             pass
 
 
-# --- FIREBASE BROWSE / DOWNLOAD ---
-@app.route('/firebase_files')
-def firebase_files():
-    # list CSV files in the configured Firebase storage bucket
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    try:
-        if not bucket:
-            raise RuntimeError('Firebase bucket not configured. Check FIREBASE_KEY_PATH and FIREBASE_STORAGE_BUCKET.')
-        blobs = bucket.list_blobs()
-        csv_files = [b.name for b in blobs if b.name.lower().endswith('.csv')]
-        return render_template('firebase_files.html', files=csv_files)
-    except Exception as e:
-        # Print full traceback server-side, and return the exception message in the response
-        import traceback
-        traceback.print_exc()
-        return f"❌ Failed to list Firebase files: {str(e)}"
-
-
-@app.route('/firebase_download_legacy')
-def firebase_download_legacy():
-    # stream a file from Firebase storage to the client
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    name = request.args.get('name')
-    if not name:
-        return "⚠️ File name not provided"
-    try:
-        blob = bucket.blob(name)
-        data = blob.download_as_bytes()
-        mem = io.BytesIO(data)
-        mem.seek(0)
-        # return as attachment so browser opens or downloads the CSV
-        try:
-            return send_file(mem, mimetype='text/csv', as_attachment=True, download_name=name)
-        except TypeError:
-            return send_file(mem, mimetype='text/csv', as_attachment=True, attachment_filename=name)
-    except Exception as e:
-        print('Error downloading Firebase file:', e)
-        return "❌ Failed to download file from Firebase"
-
-
-@app.route('/firebase_signed_url')
-def firebase_signed_url():
-    # Generate a signed URL for an object for direct download.
-    if 'user' not in session:
-        return jsonify({'success': False, 'message': 'Not authorized'}), 401
-    name = request.args.get('name')
-    expiry_min = int(request.args.get('expiry', 15))
-    if not name:
-        return jsonify({'success': False, 'message': 'File name required'}), 400
-
-    try:
-        # Use google-cloud-storage client (not firebase_admin) to generate signed URL
-        client = gcs_storage.Client.from_service_account_json(FIREBASE_KEY_PATH)
-        bucket_obj = client.bucket(FIREBASE_BUCKET)
-        blob = bucket_obj.blob(name)
-
-        url = blob.generate_signed_url(version='v4', expiration=timedelta(minutes=expiry_min), method='GET')
-        return jsonify({'success': True, 'url': url})
-    except Exception as e:
-        print('Error generating signed URL:', e)
-        return jsonify({'success': False, 'message': 'Failed to generate signed URL'}), 500
-
-
-# Debug route: list buckets accessible by the service account and show the resolved FIREBASE_BUCKET.
-@app.route('/debug/firebase_buckets')
-def debug_firebase_buckets():
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    try:
-        client = gcs_storage.Client.from_service_account_json(FIREBASE_KEY_PATH)
-        buckets = [b.name for b in client.list_buckets()]
-        return jsonify({'resolved_bucket_env': FIREBASE_BUCKET, 'available_buckets': buckets})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e), 'resolved_bucket_env': FIREBASE_BUCKET}), 500
-
-
-# Deterministic check for a specific bucket without requiring broad list permissions
-@app.route('/debug/firebase_bucket_check')
-def debug_firebase_bucket_check():
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    try:
-        if not FIREBASE_BUCKET:
-            return jsonify({'ok': False, 'reason': 'FIREBASE_STORAGE_BUCKET not set', 'resolved_bucket_env': FIREBASE_BUCKET}), 400
-
-        client = gcs_storage.Client.from_service_account_json(FIREBASE_KEY_PATH)
-        # lookup_bucket returns None if bucket does not exist or not accessible
-        bucket_obj = client.lookup_bucket(FIREBASE_BUCKET)
-        if bucket_obj is None:
-            return jsonify({'ok': False, 'reason': 'Bucket not found or not accessible', 'bucket': FIREBASE_BUCKET}), 404
-        return jsonify({'ok': True, 'bucket': bucket_obj.name, 'location': getattr(bucket_obj, 'location', None)})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e), 'bucket': FIREBASE_BUCKET}), 500
-
-
 # List all registered routes to help diagnose 404s
 @app.route('/debug/routes')
 def debug_routes():
@@ -472,14 +210,7 @@ def health():
         cur.execute("SELECT 1")
         cur.close()
         conn.close()
-        # Firebase check (optional)
-        fb = bool(bucket is not None)
-        return jsonify({
-            'ok': True,
-            'db': 'ok',
-            'firebase': 'ok' if fb else 'disabled',
-            'bucket': FIREBASE_BUCKET or None
-        })
+        return jsonify({'ok': True, 'db': 'ok'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -510,152 +241,6 @@ def delete_data_route():
     finally:
         cursor.close()
         conn.close()
-
-
-# --- FIREBASE BACKUP & RESTORE FEATURES ---
-
-@app.route('/restore_from_firebase', methods=['POST'])
-def restore_from_firebase():
-    """Restore submitted data from Firebase backup to MySQL"""
-    if 'user' not in session:
-        return jsonify({'success': False, 'message': 'Not authorized'}), 401
-    
-    data = request.get_json()
-    table = data.get('table')
-    month = data.get('month')
-    
-    if not table or not month:
-        return jsonify({'success': False, 'message': 'Table and month are required'})
-    
-    final_table = f"submitted_{table}_{month}"
-    storage_path = f"submitted/{final_table}.csv"
-    
-    try:
-        # Download CSV from Firebase
-        blob = bucket.blob(storage_path)
-        csv_data = blob.download_as_text()
-        
-        # Parse CSV
-        csv_reader = csv.DictReader(io.StringIO(csv_data))
-        rows = list(csv_reader)
-        
-        if not rows:
-            return jsonify({'success': False, 'message': 'No data found in Firebase backup'})
-        
-        # Restore to MySQL
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        try:
-            # Drop existing table if it exists
-            cursor.execute(f"DROP TABLE IF EXISTS {final_table}")
-            
-            # Recreate table based on table type
-            if table.lower() == "wasem":
-                cursor.execute(f"""
-                    CREATE TABLE {final_table} (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        date DATE,
-                        item VARCHAR(100),
-                        code VARCHAR(50),
-                        G_Rate FLOAT,
-                        H_Rate FLOAT,
-                        quantity FLOAT,
-                        G_Total FLOAT,
-                        H_Total FLOAT
-                    )
-                """)
-            else:
-                cursor.execute(f"""
-                    CREATE TABLE {final_table} (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        date DATE,
-                        item VARCHAR(100),
-                        code VARCHAR(50),
-                        rate FLOAT,
-                        quantity FLOAT,
-                        total FLOAT
-                    )
-                """)
-            
-            # Insert data
-            for row in rows:
-                if table.lower() == "wasem":
-                    cursor.execute(f"""
-                        INSERT INTO {final_table} (date, item, code, G_Rate, H_Rate, quantity, G_Total, H_Total)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (row['date'], row['item'], row['code'], row['G_Rate'], row['H_Rate'], 
-                          row['quantity'], row['G_Total'], row['H_Total']))
-                else:
-                    cursor.execute(f"""
-                        INSERT INTO {final_table} (date, item, code, rate, quantity, total)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (row['date'], row['item'], row['code'], row['rate'], row['quantity'], row['total']))
-            
-            conn.commit()
-            return jsonify({'success': True, 'message': f'✅ Successfully restored {len(rows)} records from Firebase'})
-            
-        finally:
-            cursor.close()
-            conn.close()
-            
-    except Exception as e:
-        print(f'Restore error: {e}')
-        return jsonify({'success': False, 'message': f'❌ Failed to restore: {str(e)}'})
-
-
-@app.route('/backup_all_to_firebase', methods=['POST'])
-def backup_all_to_firebase():
-    """Manually trigger backup of all submitted tables to Firebase"""
-    if 'user' not in session:
-        return jsonify({'success': False, 'message': 'Not authorized'}), 401
-    
-    try:
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        # Get all submitted tables
-        cursor.execute("SHOW TABLES LIKE 'submitted_%'")
-        tables = [list(row.values())[0] for row in cursor.fetchall()]
-        
-        backed_up = 0
-        failed = []
-        
-        for table_name in tables:
-            try:
-                # Fetch all data
-                cursor.execute(f"SELECT * FROM {table_name} ORDER BY id DESC")
-                rows = cursor.fetchall()
-                
-                if rows:
-                    # Create CSV
-                    out = io.StringIO()
-                    writer = csv.writer(out)
-                    writer.writerow(rows[0].keys())
-                    for r in rows:
-                        writer.writerow(r.values())
-                    out.seek(0)
-                    
-                    # Upload to Firebase
-                    storage_path = f"submitted/{table_name}.csv"
-                    upload_csv_to_firebase(storage_path, out.getvalue())
-                    backed_up += 1
-            except Exception as e:
-                print(f'Failed to backup {table_name}: {e}')
-                failed.append(table_name)
-        
-        cursor.close()
-        conn.close()
-        
-        message = f'✅ Backed up {backed_up} tables to Firebase'
-        if failed:
-            message += f'. Failed: {", ".join(failed)}'
-        
-        return jsonify({'success': True, 'message': message, 'backed_up': backed_up, 'failed': len(failed)})
-        
-    except Exception as e:
-        print(f'Backup error: {e}')
-        return jsonify({'success': False, 'message': f'❌ Backup failed: {str(e)}'})
 
 
 if __name__ == "__main__":
