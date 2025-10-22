@@ -42,14 +42,16 @@ def get_items():
     table = request.args.get('table')
     if table not in get_tables_list():
         return jsonify([])
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
     try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
         data = fetch_items(cursor, table)
-        return jsonify(data)
-    finally:
         cursor.close()
         conn.close()
+        return jsonify(data)
+    except Exception as e:
+        print(f"Error fetching items from {table}: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/submit', methods=['POST'])
 def submit():
