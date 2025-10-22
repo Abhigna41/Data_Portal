@@ -101,33 +101,40 @@ def download_page():
     if 'user' not in session:
         return redirect(url_for('index'))
 
-    # Create a new connection and cursor
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    try:
+        # Create a new connection and cursor
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
 
-    all_tables = ['id_grind', 'od_grind', 'od_patch', 'milling', 'wasem', 'turning']
+        all_tables = ['id_grind', 'od_grind', 'od_patch', 'milling', 'wasem', 'turning']
 
-    table_month_dict = {}
-    cursor.execute("SHOW TABLES LIKE 'submitted_%'")
-    submitted_tables = [row['Tables_in_data_portal (submitted_%)'] for row in cursor.fetchall()]
+        table_month_dict = {}
+        cursor.execute("SHOW TABLES LIKE 'submitted_%'")
+        results = cursor.fetchall()
+        
+        # Get the first column value regardless of column name
+        submitted_tables = [list(row.values())[0] for row in results]
 
-    for table_name in all_tables:
-        table_month_dict[table_name] = []
-        for t in submitted_tables:
-            if not t.startswith("submitted_"):
-                continue
-            table_part = t.replace("submitted_", "", 1)
-            parts = table_part.rsplit("_", 2)
-            if len(parts) != 3:
-                continue
-            name, year, month = parts
-            if name == table_name:
-                table_month_dict[table_name].append(f"{year}_{month}")
+        for table_name in all_tables:
+            table_month_dict[table_name] = []
+            for t in submitted_tables:
+                if not t.startswith("submitted_"):
+                    continue
+                table_part = t.replace("submitted_", "", 1)
+                parts = table_part.rsplit("_", 2)
+                if len(parts) != 3:
+                    continue
+                name, year, month = parts
+                if name == table_name:
+                    table_month_dict[table_name].append(f"{year}_{month}")
 
-    cursor.close()
-    conn.close()
+        cursor.close()
+        conn.close()
 
-    return render_template('download.html', table_month_dict=table_month_dict)
+        return render_template('download.html', table_month_dict=table_month_dict)
+    except Exception as e:
+        print(f"Error in download_page: {e}")
+        return f"Error loading download page: {str(e)}", 500
 
 @app.route('/download', methods=['GET'])
 def download_data():
