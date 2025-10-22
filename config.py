@@ -8,7 +8,8 @@ DB_CONFIG = {
     "host": os.getenv("MYSQL_HOST", "localhost"),
     "user": os.getenv("MYSQL_USER", "root"),
     "password": os.getenv("MYSQL_PASSWORD", "0000"),
-    "database": os.getenv("MYSQL_DB", "data_portal")
+    "database": os.getenv("MYSQL_DB", "data_portal"),
+    "consume_results": True  # Fix "Unread result found" error
 }
 
 SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
